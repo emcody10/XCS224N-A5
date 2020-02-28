@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import torch.nn as nn
-
+from cnn import CNN
+from highway import Highway
+import torch
 
 # Do not change these imports; your module names should be
 #   `CNN` in the file `cnn.py`
@@ -33,7 +35,24 @@ class ModelEmbeddings(nn.Module):
         ## End A4 code
 
         ### YOUR CODE HERE for part 1f
-
+        self.embed_size = embed_size
+        self.vocab = vocab
+        self.char_embed_size = 50
+        self.max_word_len = 21
+        self.dropout_rate = 0.3
+        self.char_embedding = nn.Embedding(
+            num_embeddings=len(vocab.char2id),
+            embedding_dim=self.char_embed_size,
+            padding_idx=vocab.char2id['<pad>']
+        )
+        self.CNN = CNN(
+            char_embedding_size=self.char_embed_size,
+            num_filters=embed_size,
+            max_word_length=self.max_word_len,
+            kernel_size=5
+        )
+        self.Highway = Highway(embed_size)
+        self.dropout = nn.Dropout(p=self.dropout_rate)
         ### END YOUR CODE
 
     def forward(self, input_tensor):
@@ -51,5 +70,12 @@ class ModelEmbeddings(nn.Module):
         ## End A4 code
 
         ### YOUR CODE HERE for part 1f
-
+        x_emb = self.char_embedding(input_tensor) # sent_len x batch_size x max_word x char_embed_size
+        sent_len, batch_size, max_word, _ = x_emb.shape # need to reshape to 3 dimensions
+        x_reshape = x_emb.view(sent_len * batch_size, max_word, self.char_embed_size).transpose(1, 2)
+        x_cnn = self.CNN(x_reshape)
+        x_high = self.Highway(x_cnn)
+        x_out = self.dropout(x_high)
+        x_out = x_out.view(sent_len, batch_size, self.embed_size) # from 2 dims to 3 dims
+        return x_out
         ### END YOUR CODE
